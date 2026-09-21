@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GEO-SPHERE EX: ผู้พิทักษ์สมดุลโลก (ม.5)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            /* Earth & Ocean Vibe */
+            --neon-primary: #10b981; /* Emerald Green */
+            --neon-secondary: #06b6d4; /* Cyan */
+            --neon-accent: #3b82f6; /* Blue */
+            --neon-danger: #ef4444; /* Red */
+            --bg-dark: #020617; /* Deep Night Sky */
+        }
+
+        body { 
+            margin: 0; background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Kanit', sans-serif; 
+            user-select: none; width: 100vw; height: 100vh; height: 100dvh; overflow-x: hidden; overflow-y: auto;
+        }
+        .font-sci { font-family: 'Orbitron', sans-serif; } 
+        .glass-panel { background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 1rem; box-shadow: 0 0 30px rgba(16, 185, 129, 0.1); }
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        
+        #ui-layer { position: relative; width: 100%; min-height: 100%; z-index: 10; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+
+        @media (max-width: 768px) {
+            .desktop-only { display: none !important; }
+            .mobile-py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+            .stats-container { flex-wrap: wrap; justify-content: center; gap: 0.5rem !important; }
+            .stats-divider { display: none; }
+            #question-container { padding: 1.5rem !important; margin-top: 1rem !important; }
+            .circular-timer { transform: translateX(0) scale(0.7); left: auto; right: -10px; top: -20px; }
+            #ui-choices { flex-direction: column !important; }
+            .choice-card-v2 { min-height: 70px; padding: 0.75rem !important; }
+        }
+
+        /* GEO-SPHERE Auth UI */
+        .auth-panel-v2 { background: linear-gradient(135deg, rgba(2, 10, 20, 0.9) 0%, rgba(5, 20, 30, 0.95) 100%); border: 2px solid rgba(16, 185, 129, 0.6); box-shadow: 0 0 40px rgba(16, 185, 129, 0.3), inset 0 0 20px rgba(6, 182, 212, 0.1); border-radius: 20px; position: relative; }
+        .auth-input-wrap { background: rgba(10, 30, 40, 0.5); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; transition: all 0.3s ease; }
+        .auth-input-wrap:focus-within { border-color: var(--neon-secondary); box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); background: rgba(10, 30, 40, 0.8); }
+        .auth-input { background: transparent; border: none; color: white; outline: none; width: 100%; padding: 10px; font-family: 'Kanit', sans-serif; letter-spacing: 1px; }
+        .auth-input::placeholder { color: rgba(148, 163, 184, 0.5); }
+        .auth-btn { background: linear-gradient(90deg, #06b6d4 0%, #10b981 100%); border: none; border-radius: 30px; box-shadow: 0 0 20px rgba(16, 185, 129, 0.5); transition: all 0.3s; }
+        .auth-btn:hover { box-shadow: 0 0 30px rgba(16, 185, 129, 0.8); transform: scale(1.02); }
+
+        .input-error-wrap { border-color: var(--neon-danger) !important; background: rgba(239, 68, 68, 0.1) !important; animation: shake 0.4s; }
+        .btn-loading { opacity: 0.8; pointer-events: none; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+        .countdown-pop { animation: pop-in 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 40% { transform: scale(1.2); opacity: 1; } 60% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+        .countdown-go { animation: pop-go 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes pop-go { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.5); opacity: 1; text-shadow: 0 0 40px var(--neon-primary); } 100% { transform: scale(2); opacity: 0; } }
+
+        .circular-timer { position: absolute; top: -35px; left: 50%; transform: translateX(-50%); width: 70px; height: 70px; border-radius: 50%; z-index: 50; background: conic-gradient(var(--neon-secondary) var(--timer-pct, 100%), rgba(255,255,255,0.05) 0); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(6, 182, 212, 0.4), inset 0 0 10px rgba(0,0,0,0.5); border: 4px solid var(--bg-dark); transition: background 1s linear; }
+        .circular-timer::before { content: ""; position: absolute; inset: 4px; background: rgba(5, 10, 20, 0.95); border-radius: 50%; box-shadow: inset 0 0 10px rgba(6, 182, 212, 0.2); }
+        .circular-timer-text { position: relative; z-index: 10; font-family: 'Orbitron', sans-serif; font-size: 1.75rem; font-weight: bold; color: white; }
+        .timer-warning { background: conic-gradient(var(--neon-danger) var(--timer-pct, 100%), rgba(255,255,255,0.1) 0); box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); animation: pulse-red-timer 1s infinite; }
+        .timer-warning-text { color: var(--neon-danger); text-shadow: 0 0 10px rgba(239,68,68,0.8); }
+
+        #question-container { transition: all 0.3s; border: 1px solid rgba(255,255,255,0.1); background: rgba(5, 20, 30, 0.7); border-radius: 16px; margin-top: 30px; }
+        #question-container.success { background: rgba(16, 185, 129, 0.15); border-color: #34d399; border-style: solid; box-shadow: 0 0 40px rgba(16, 185, 129, 0.4); }
+        #question-container.error { background: rgba(239, 68, 68, 0.15); border-color: var(--neon-danger); border-style: solid; box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); }
+
+        .choice-card-v2 { background: linear-gradient(180deg, rgba(20, 40, 50, 0.8) 0%, rgba(10, 20, 30, 0.9) 100%); border: 1px solid rgba(255, 255, 255, 0.05); border-bottom: 4px solid var(--card-color); border-radius: 12px; color: #e2e8f0; transition: all 0.2s ease; cursor: pointer; position: relative; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); touch-action: none; }
+        .choice-card-v2::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 50% 0%, var(--card-color) 0%, transparent 60%); opacity: 0.1; transition: opacity 0.3s; pointer-events: none; }
+        .choice-card-v2.hovered, .choice-card-v2:hover { transform: translateY(-5px); border-color: var(--card-color); box-shadow: 0 15px 25px rgba(0,0,0,0.6), 0 0 20px var(--card-color); color: white; }
+        .choice-card-v2.hovered::before, .choice-card-v2:hover::before { opacity: 0.3; }
+        .choice-card-v2.grabbing { transform: scale(1.05); background: var(--card-color); z-index: 100; box-shadow: 0 0 40px var(--card-color); }
+        .choice-card-v2.grabbing * { color: #fff !important; text-shadow: 0 2px 4px rgba(0,0,0,0.5) !important; }
+
+        .circle-num { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.25rem; color: white; background: var(--card-color); box-shadow: 0 0 15px var(--card-color); flex-shrink: 0; }
+        .track-line { position: absolute; top: 50%; left: 10%; width: 80%; height: 2px; background: linear-gradient(90deg, transparent, rgba(16,185,129,0.5), transparent); box-shadow: 0 0 10px rgba(16,185,129,0.5); z-index: 1; pointer-events: none; }
+        .jump-ripple { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 0; height: 0; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%); animation: ripple-anim 0.6s ease-out; pointer-events: none; z-index: 10; }
+        @keyframes ripple-anim { 0% { width: 0px; height: 0px; opacity: 1; } 100% { width: 500px; height: 500px; opacity: 0; } }
+
+        #camera-preview { position: fixed; bottom: 20px; right: 20px; width: 160px; height: 120px; border: 2px solid var(--neon-primary); border-radius: 8px; overflow: hidden; box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); z-index: 1000; transform: scaleX(-1); background: #000; }
+        
+        @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(40px); } 100% { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes stamp-in { 0% { transform: scale(2.5) rotate(-15deg); opacity: 0; } 50% { transform: scale(0.9) rotate(5deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        .animate-stamp { animation: stamp-in 0.5s ease-out forwards; }
+        @keyframes pulse-red-timer { 0% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); } 50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); } 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); } }
+
+        .neon-text-primary { text-shadow: 0 0 15px rgba(16, 185, 129, 0.8); }
+        .hidden-sys { display: none !important; }
+    </style>
+</head>
+<body class="text-slate-100">
+
+    <canvas id="bg-canvas"></canvas>
+    <video id="input_video" style="display:none;" playsinline></video>
+    <canvas id="camera-preview" class="hidden-sys desktop-only"></canvas>
+
+    <div id="ui-layer" class="p-4 sm:p-8">
+        
+        <!-- LOGIN SCREEN (Earth Science Theme) -->
+        <div id="screen-login" class="flex-1 flex flex-col items-center justify-center w-full min-h-[80vh] mobile-py-8">
+            <div class="auth-panel-v2 p-8 sm:p-10 max-w-md w-full animate-fade-in-up mx-auto text-center">
+                
+                <div class="text-6xl text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] mb-2">
+                    <i class="fa-solid fa-earth-americas"></i>
+                </div>
+                
+                <h2 class="text-2xl sm:text-3xl font-sci font-bold text-white tracking-widest neon-text-primary mb-1">GEO-SPHERE EX</h2>
+                <div class="text-cyan-300 text-xs sm:text-sm font-light mb-6 opacity-80">Global Climate & Ocean Command Center</div>
+                
+                <form id="login-form" onsubmit="LoginSys.handleLogin(event)" class="space-y-4">
+                    <div class="text-left">
+                        <label class="text-[10px] text-slate-300 uppercase tracking-widest ml-1 mb-1 block font-sci">RESEARCHER ID (เลขประจำตัว)</label>
+                        <div id="wrap-studentid" class="auth-input-wrap flex items-center px-4 py-2">
+                            <i class="fa-solid fa-id-badge text-slate-400 mr-3"></i>
+                            <input type="text" id="inp-studentid" required placeholder="Enter ID" class="auth-input font-sci">
+                        </div>
+                    </div>
+
+                    <div class="text-left">
+                        <label class="text-[10px] text-slate-300 uppercase tracking-widest ml-1 mb-1 block font-sci">FIRST NAME (ชื่อจริง)</label>
+                        <div id="wrap-firstname" class="auth-input-wrap flex items-center px-4 py-2">
+                            <i class="fa-solid fa-user-astronaut text-slate-400 mr-3"></i>
+                            <input type="text" id="inp-firstname" required placeholder="Enter First Name" class="auth-input">
+                        </div>
+                    </div>
+
+                    <div class="text-left">
+                        <label class="text-[10px] text-slate-300 uppercase tracking-widest ml-1 mb-1 block font-sci">LAST NAME (นามสกุล)</label>
+                        <div id="wrap-lastname" class="auth-input-wrap flex items-center px-4 py-2">
+                            <i class="fa-solid fa-fingerprint text-slate-400 mr-3"></i>
+                            <input type="text" id="inp-lastname" required placeholder="Enter Last Name" class="auth-input">
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btn-login-submit" class="auth-btn w-full mt-6 py-4 text-white font-sci font-bold tracking-widest text-sm sm:text-base flex items-center justify-center gap-2">
+                        <span id="btn-login-text"><i class="fa-solid fa-satellite-dish mr-2"></i> ESTABLISH LINK <i class="fa-solid fa-angles-right ml-2"></i></span>
+                    </button>
+                </form>
+
+                <!-- Footer Icons -->
+                <div class="flex justify-center gap-6 mt-8 pt-6 border-t border-emerald-900/50">
+                    <div class="text-center">
+                        <i class="fa-solid fa-sun text-yellow-400 text-xl mb-1 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]"></i>
+                        <div class="text-[8px] text-slate-400 uppercase">RADIATION<br>สมดุลพลังงาน</div>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-wind text-cyan-400 text-xl mb-1 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]"></i>
+                        <div class="text-[8px] text-slate-400 uppercase">ATMOSPHERE<br>ระบบลม</div>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-water text-blue-400 text-xl mb-1 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]"></i>
+                        <div class="text-[8px] text-slate-400 uppercase">OCEAN<br>กระแสน้ำ</div>
+                    </div>
+                </div>
+
+                <!-- Welcome Back -->
+                <div id="welcome-back-msg" class="hidden-sys absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 backdrop-blur-md rounded-2xl">
+                    <div class="text-5xl sm:text-6xl text-emerald-400 mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]"><i class="fa-solid fa-tower-broadcast"></i></div>
+                    <h2 class="text-2xl sm:text-3xl font-sci font-bold text-white tracking-widest mb-2">WELCOME BACK</h2>
+                    <div id="welcome-back-name" class="text-xl sm:text-2xl text-cyan-400 font-sci font-bold">Name</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MENU SCREEN -->
+        <div id="screen-menu" class="hidden-sys flex-1 flex flex-col items-center justify-center w-full min-h-[80vh] mobile-py-8">
+            <div class="glass-panel p-6 sm:p-10 text-center max-w-4xl w-full flex flex-col items-center mx-auto border-emerald-500/30">
+                
+                <div class="flex items-center justify-between bg-slate-900/80 border border-slate-700 px-4 py-2 sm:px-5 sm:py-3 rounded-xl mb-4 sm:mb-6 w-full shadow-inner">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-600 border-2 border-emerald-300 flex items-center justify-center text-white text-lg">
+                            <i class="fa-solid fa-user-astronaut"></i>
+                        </div>
+                        <div class="text-left">
+                            <div class="text-[8px] sm:text-[10px] text-slate-400 tracking-widest uppercase">Agent Recognized</div>
+                            <div id="display-player-name" class="font-bold text-xs sm:text-base text-white font-sci">Unknown</div>
+                        </div>
+                    </div>
+                    <div class="text-right border-l border-slate-700 pl-3">
+                        <div class="text-[8px] sm:text-[10px] text-slate-400 tracking-widest uppercase">High Score</div>
+                        <div id="display-high-score" class="font-bold text-emerald-400 font-sci text-lg sm:text-xl">0</div>
+                    </div>
+                </div>
+
+                <h1 class="text-3xl sm:text-5xl font-sci font-bold mb-1 text-white neon-text-primary tracking-wider">GEO-SPHERE EX</h1>
+                <h2 class="text-sm sm:text-lg text-cyan-300 mb-2 sm:mb-4 font-semibold">ภารกิจผู้พิทักษ์สมดุลโลก (ม.5)</h2>
+                
+                <div class="flex items-center justify-between mb-4 bg-slate-900/60 p-2 sm:p-3 rounded-lg border border-slate-700/50 w-full max-w-md mx-auto desktop-only">
+                    <div id="cam-status" class="text-[10px] sm:text-xs font-semibold text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin text-emerald-400"></i> Initializing Camera...
+                    </div>
+                </div>
+
+                <div class="mb-4 p-3 bg-cyan-900/30 rounded border border-cyan-500/50 text-xs text-cyan-200" id="device-hint">
+                    Loading Hint...
+                </div>
+
+                <!-- Stage Selection UI -->
+                <div class="w-full text-left mb-2">
+                    <h3 class="text-slate-400 font-sci tracking-widest text-sm border-b border-slate-700 pb-1"><i class="fa-solid fa-map-location-dot mr-2"></i> SELECT MISSION STAGE</h3>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mt-2 mb-6">
+                    <!-- Stage 1 -->
+                    <div onclick="GameSys.startCountdown(1)" class="glass-panel p-5 cursor-pointer hover:-translate-y-2 transition-all border-yellow-500/50 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] group bg-slate-900/80">
+                        <div class="text-yellow-400 text-3xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-sun"></i></div>
+                        <h3 class="text-white font-sci font-bold text-xl">STAGE 1</h3>
+                        <div class="text-yellow-300 text-xs mb-3 font-semibold">THERMAL BALANCE</div>
+                        <div class="text-slate-400 text-[10px] mb-3 leading-tight">รังสี อัลบีโด และปรากฏการณ์สมดุลพลังงานของโลก</div>
+                    </div>
+                    <!-- Stage 2 -->
+                    <div onclick="GameSys.startCountdown(2)" class="glass-panel p-5 cursor-pointer hover:-translate-y-2 transition-all border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] group bg-slate-900/80">
+                        <div class="text-cyan-400 text-3xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-wind"></i></div>
+                        <h3 class="text-white font-sci font-bold text-xl">STAGE 2</h3>
+                        <div class="text-cyan-300 text-xs mb-3 font-semibold">ATMOS NAVIGATOR</div>
+                        <div class="text-slate-400 text-[10px] mb-3 leading-tight">การหมุนเวียนของอากาศ ระบบลม และแรงคอริออลิส</div>
+                    </div>
+                    <!-- Stage 3 -->
+                    <div onclick="GameSys.startCountdown(3)" class="glass-panel p-5 cursor-pointer hover:-translate-y-2 transition-all border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.4)] group bg-slate-900/80">
+                        <div class="text-blue-400 text-3xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-water"></i></div>
+                        <h3 class="text-white font-sci font-bold text-xl">STAGE 3</h3>
+                        <div class="text-blue-300 text-xs mb-3 font-semibold">ABYSS CURRENT</div>
+                        <div class="text-slate-400 text-[10px] mb-3 leading-tight">กระแสน้ำผิวน้ำ/น้ำลึก ปรากฏการณ์เอลนีโญ และลานีญา</div>
+                    </div>
+                </div>
+
+                <div class="flex justify-center gap-4 sm:gap-6 w-full text-xs sm:text-sm">
+                    <button onclick="AudioSys.toggleSound()" id="btn-sound" class="text-slate-400 hover:text-white transition flex items-center gap-2">
+                        <i class="fa-solid fa-volume-high"></i> Sound
+                    </button>
+                    <button onclick="LoginSys.logout()" class="text-red-400 hover:text-red-300 transition flex items-center gap-2">
+                        <i class="fa-solid fa-power-off"></i> Switch User
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- COUNTDOWN SCREEN -->
+        <div id="screen-countdown" class="hidden-sys fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md">
+            <div id="countdown-text" class="text-8xl sm:text-9xl font-sci font-bold text-emerald-400 drop-shadow-[0_0_30px_rgba(16,185,129,0.8)]">3</div>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="screen-game" class="hidden-sys flex-1 flex flex-col w-full max-w-6xl mx-auto pb-8">
+            <div class="glass-panel px-4 py-3 flex justify-between items-center mb-4 sm:mb-6 border-emerald-500/30">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <div class="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-emerald-400 bg-slate-900 flex items-center justify-center">
+                        <i class="fa-solid fa-user-astronaut text-base sm:text-2xl text-emerald-300"></i>
+                    </div>
+                    <div class="hidden sm:block">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-widest">RESEARCHER</div>
+                        <div id="ui-player-name" class="font-bold text-white tracking-wide text-sm font-sci uppercase">Player</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 sm:gap-8 bg-slate-900/80 px-3 sm:px-6 py-1 sm:py-2 rounded-full border border-slate-700 stats-container">
+                    <div class="text-center">
+                        <div class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold" id="ui-stage-indicator">STAGE 1</div>
+                        <div class="font-bold text-white text-sm sm:text-lg"><span id="ui-qnum">1</span><span class="text-slate-500">/5</span></div>
+                    </div>
+                    <div class="w-px h-6 bg-slate-700 stats-divider"></div>
+                    <div class="text-center">
+                        <div class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold">SCORE</div>
+                        <div id="ui-score" class="font-bold text-emerald-400 text-sm sm:text-xl font-sci">0</div>
+                    </div>
+                    <div class="w-px h-6 bg-slate-700 stats-divider"></div>
+                    <div class="text-center">
+                        <div class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold">COMBO</div>
+                        <div id="ui-combo" class="font-bold text-amber-400 text-sm sm:text-xl font-sci">x0</div>
+                    </div>
+                    <div class="w-px h-6 bg-slate-700 stats-divider"></div>
+                    <div class="text-center">
+                        <div class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold">ENERGY</div>
+                        <div id="ui-energy" class="flex gap-0.5 sm:gap-1 text-red-500 text-xs sm:text-base mt-1"></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <button onclick="GameSys.returnToMenu()" class="bg-slate-800 hover:bg-red-900/50 border border-slate-600 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-slate-300 hover:text-red-400 transition-colors w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="question-container" class="p-6 sm:p-12 mb-4 sm:mb-8 text-center z-10 flex flex-col items-center justify-center relative">
+                <div id="ui-timer-circle" class="circular-timer" style="--timer-pct: 100%;">
+                    <span id="ui-timer" class="circular-timer-text text-lg">30</span>
+                </div>
+
+                <div class="w-full flex justify-between items-center absolute top-2 sm:top-4 left-0 px-4 sm:px-6">
+                    <div id="ui-category" class="text-cyan-300 text-[8px] sm:text-[10px] font-bold tracking-widest bg-cyan-900/30 px-2 py-0.5 rounded-full border border-cyan-800 uppercase">CAT</div>
+                    <div id="ui-mode-text" class="text-[8px] sm:text-[10px] text-slate-500 uppercase tracking-widest desktop-only">โหมด: AI Pose + กระโดด</div>
+                </div>
+                
+                <h2 id="ui-question" class="text-lg sm:text-2xl md:text-3xl font-semibold leading-relaxed relative z-20 text-white mt-4 sm:mt-6">
+                    Loading Question...
+                </h2>
+                
+                <div id="question-result-overlay" class="absolute inset-0 flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300 z-40 bg-slate-900/95 backdrop-blur-md rounded-2xl">
+                    <div id="question-result-icon" class="text-4xl sm:text-6xl mb-2"></div>
+                    <div id="question-result-text" class="text-2xl sm:text-4xl font-bold font-sci tracking-widest"></div>
+                    <div id="question-result-pts" class="text-base sm:text-xl font-bold font-sci mt-2 flex gap-3"></div>
+                    <div id="question-result-desc" class="mt-4 px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-300 text-xs sm:text-sm max-w-2xl hidden"></div>
+                </div>
+            </div>
+
+            <!-- Track line for desktop -->
+            <div class="relative w-full h-10 sm:h-16 mb-2 sm:mb-4 z-20 desktop-only">
+                <div class="track-line"></div>
+                <div id="player-indicator" class="absolute top-1/2 -translate-y-1/2 w-10 h-10 sm:w-16 sm:h-16 bg-slate-900 rounded-full flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.5)] border-2 border-emerald-500 transition-all duration-100 transform -translate-x-1/2 z-10" style="left: 50%; display: none;">
+                    <i class="fa-solid fa-street-view text-xl sm:text-3xl"></i>
+                </div>
+            </div>
+
+            <div id="ui-choices" class="flex flex-col sm:flex-row justify-between gap-3 sm:gap-6 mb-2 sm:mb-4 z-20 w-full relative"></div>
+
+            <div class="text-center text-[10px] sm:text-xs text-slate-400 mt-2 tracking-wide bg-slate-900/50 py-1 sm:py-2 rounded-full border border-slate-700/50 inline-block px-4 mx-auto desktop-only">
+                <i class="fa-solid fa-arrows-left-right text-emerald-500 mr-2"></i> เดินไปที่คำตอบ แล้ว <b>"กระโดด"</b> เพื่อยืนยัน
+            </div>
+        </div>
+
+        <!-- RESULT SCREEN -->
+        <div id="screen-result" class="hidden-sys absolute inset-0 z-50 overflow-y-auto bg-slate-950/90 backdrop-blur-lg pt-10 pb-10">
+            <div class="flex items-center justify-center min-h-full px-4">
+                <div class="glass-panel p-6 sm:p-12 max-w-3xl w-full text-center relative border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.2)] mx-auto">
+                    <h1 class="text-2xl sm:text-5xl font-sci font-bold mb-2 text-emerald-400 tracking-widest neon-text-primary" id="result-header">MISSION COMPLETE</h1>
+                    <div class="text-xs sm:text-xl text-slate-400 mb-6 font-semibold uppercase" id="result-subheader">STAGE 1 FINISHED</div>
+
+                    <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-6">
+                        <div class="flex-1 bg-slate-900/80 p-4 sm:p-6 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
+                            <div id="result-icon" class="text-4xl sm:text-6xl mb-4 text-emerald-400"><i class="fa-solid fa-globe"></i></div>
+                            <div class="text-[10px] sm:text-sm text-slate-400 uppercase tracking-widest font-bold">STAGE RANK</div>
+                            <div id="result-rank" class="text-lg sm:text-2xl font-bold text-cyan-300 font-sci">CLEARED</div>
+                        </div>
+
+                        <div class="flex-1 grid grid-cols-2 gap-2 sm:gap-4 text-left">
+                            <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/80">
+                                <div class="text-slate-400 text-[8px] sm:text-[10px] uppercase font-bold">Stage Score</div>
+                                <div id="result-score" class="font-sci text-xl sm:text-3xl text-emerald-400 font-bold">0</div>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/80">
+                                <div class="text-slate-400 text-[8px] sm:text-[10px] uppercase font-bold">Time Used</div>
+                                <div id="result-time" class="font-sci text-xl sm:text-3xl text-white font-bold">00:00</div>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/80">
+                                <div class="text-slate-400 text-[8px] sm:text-[10px] uppercase font-bold">Correct/Wrong</div>
+                                <div class="font-sci text-lg sm:text-2xl text-white font-bold mt-1"><span id="result-correct" class="text-green-400">0</span> <span class="text-slate-500">/</span> <span id="result-wrong" class="text-red-400">0</span></div>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-700/80">
+                                <div class="text-slate-400 text-[8px] sm:text-[10px] uppercase font-bold">Accuracy</div>
+                                <div id="result-acc" class="font-sci text-xl sm:text-3xl text-cyan-400 font-bold">0%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="backend-status" class="mb-6 p-2 sm:p-3 rounded-lg border border-slate-700 bg-slate-900/90 text-xs sm:text-sm font-bold flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-satellite-dish animate-pulse text-emerald-400"></i> 
+                        <span id="backend-status-text" class="text-emerald-300 font-sci">Transmitting Data...</span>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row justify-center gap-3">
+                        <button onclick="GameSys.returnToMenu()" id="btn-menu-action" class="px-4 py-2 sm:px-6 sm:py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-full font-bold border border-slate-600 text-xs sm:text-base">
+                            <i class="fa-solid fa-house mr-2"></i> COMMAND CENTER
+                        </button>
+                        <button id="btn-primary-action" class="px-5 py-2 sm:px-8 sm:py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold text-xs sm:text-base opacity-50 cursor-not-allowed" disabled>
+                            <i class="fa-solid fa-forward mr-2"></i> NEXT STAGE
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DeviceSys = {
+            isMobile: false,
+            init() {
+                this.isMobile = (window.innerWidth <= 768) || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                const hintEl = document.getElementById('device-hint');
+                if(this.isMobile) {
+                    hintEl.innerHTML = '<i class="fa-solid fa-mobile-screen text-cyan-400"></i> ตรวจพบอุปกรณ์มือถือ: แตะเลือกคำตอบได้ทันที (ปิดระบบกล้องเพื่อประหยัดแบตเตอรี่)';
+                } else {
+                    hintEl.innerHTML = '<i class="fa-solid fa-laptop text-emerald-400"></i> โหมด Desktop: เปิดใช้งานกล้อง ให้ผู้เล่น "เดินซ้ายขวา และ กระโดด" เพื่อตอบคำถาม';
+                }
+            }
+        };
+
+        const LoginSys = {
+            init() {
+                const sId = localStorage.getItem('geo_studentid');
+                const fName = localStorage.getItem('geo_firstname');
+                const lName = localStorage.getItem('geo_lastname');
+                this.setupValidation();
+                if(sId && fName && lName) {
+                    GameState.student.studentId = sId; GameState.student.firstName = fName; GameState.student.lastName = lName;
+                    this.showWelcomeBack(fName, lName);
+                }
+            },
+            setupValidation() {
+                const inputs = ['studentid', 'firstname', 'lastname'];
+                inputs.forEach(id => {
+                    const el = document.getElementById(`inp-${id}`); const wrap = document.getElementById(`wrap-${id}`);
+                    if(el) { el.addEventListener('input', () => { wrap.classList.remove('input-error-wrap'); }); }
+                });
+            },
+            validateData(sId, fName, lName) {
+                let isValid = true;
+                if(!sId) { document.getElementById('wrap-studentid').classList.add('input-error-wrap'); isValid = false; }
+                if(!fName || fName.length < 2) { document.getElementById('wrap-firstname').classList.add('input-error-wrap'); isValid = false; }
+                if(!lName || lName.length < 2) { document.getElementById('wrap-lastname').classList.add('input-error-wrap'); isValid = false; }
+                return isValid;
+            },
+            async handleLogin(e) {
+                if(e) e.preventDefault();
+                const btn = document.getElementById('btn-login-submit'); const btnText = document.getElementById('btn-login-text');
+                const sId = document.getElementById('inp-studentid').value.trim(); const fName = document.getElementById('inp-firstname').value.trim(); const lName = document.getElementById('inp-lastname').value.trim();
+                if(!this.validateData(sId, fName, lName)) { if(AudioSys.ctx) AudioSys.playError(); return; }
+
+                btn.classList.add('btn-loading'); btnText.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> CONNECTING...';
+                if(AudioSys.ctx === null) AudioSys.init(); AudioSys.playTick();
+                await new Promise(r => setTimeout(r, 800));
+
+                btn.classList.remove('btn-loading'); btnText.innerHTML = '<i class="fa-solid fa-check mr-2"></i> LINK ESTABLISHED'; AudioSys.playCorrect();
+                GameState.student.studentId = sId; GameState.student.firstName = fName; GameState.student.lastName = lName;
+                localStorage.setItem('geo_studentid', sId); localStorage.setItem('geo_firstname', fName); localStorage.setItem('geo_lastname', lName);
+                setTimeout(() => { btnText.innerHTML = '<i class="fa-solid fa-satellite-dish mr-2"></i> ESTABLISH LINK <i class="fa-solid fa-angles-right ml-2"></i>'; this.showMenu(); }, 500);
+            },
+            showWelcomeBack(fName, lName) {
+                const welcomeScreen = document.getElementById('welcome-back-msg');
+                document.getElementById('welcome-back-name').innerText = `${fName} ${lName}`;
+                welcomeScreen.classList.remove('hidden-sys');
+                if(AudioSys.ctx === null) AudioSys.init();
+                setTimeout(() => { if(AudioSys.ctx) AudioSys.playCorrect(); setTimeout(() => { welcomeScreen.classList.add('hidden-sys'); this.showMenu(); }, 600); }, 800);
+            },
+            logout() {
+                localStorage.removeItem('geo_studentid'); localStorage.removeItem('geo_firstname'); localStorage.removeItem('geo_lastname');
+                GameState.student.studentId = ''; GameState.student.firstName = ''; GameState.student.lastName = '';
+                document.getElementById('screen-menu').classList.add('hidden-sys'); document.getElementById('screen-login').classList.remove('hidden-sys');
+                document.getElementById('inp-studentid').value = ''; document.getElementById('inp-firstname').value = ''; document.getElementById('inp-lastname').value = '';
+                AudioSys.stopBGM();
+            },
+            showMenu() {
+                document.getElementById('screen-login').classList.add('hidden-sys'); document.getElementById('screen-menu').classList.remove('hidden-sys');
+                document.getElementById('display-player-name').innerText = `ID:${GameState.student.studentId} | ${GameState.student.firstName} ${GameState.student.lastName}`;
+                const hs = localStorage.getItem(`geo_hs_${GameState.student.studentId}`) || 0;
+                document.getElementById('display-high-score').innerText = hs;
+                if(AudioSys.ctx === null) AudioSys.init(); AudioSys.startBGM();
+            }
+        };
+
+        const BackendSys = {
+            url: "https://script.google.com/macros/s/AKfycbwLODVUGn4J8hSYsprK00HNqdB8-zAnafAZDnm2sOWm1YCndjkFjbsWy9FaDeHSBKYQ/exec",
+            async saveAttempt(payload) {
+                const statusIcon = document.querySelector('#backend-status i'); const statusText = document.getElementById('backend-status-text'); const btnPrimaryAction = document.getElementById('btn-primary-action');
+                try {
+                    statusIcon.className = "fa-solid fa-satellite-dish animate-pulse text-cyan-400"; statusText.innerText = "Transmitting Data..."; statusText.className = "text-cyan-300";
+                    const response = await fetch(this.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+                    const text = await response.text(); let result; try { result = JSON.parse(text); } catch(e){ throw new Error("Invalid format."); }
+                    if(result && result.success) { statusIcon.className = "fa-solid fa-circle-check text-emerald-400"; statusText.innerText = "Data Transmitted Successfully!"; statusText.className = "text-emerald-400"; } 
+                    else throw new Error(result ? result.message : "Unknown Error");
+                } catch (error) {
+                    statusIcon.className = "fa-solid fa-triangle-exclamation text-red-400"; statusText.innerText = "Transmission Failed (Local Data Kept)"; statusText.className = "text-red-400";
+                } finally { btnPrimaryAction.disabled = false; btnPrimaryAction.classList.remove('opacity-50', 'cursor-not-allowed'); }
+            }
+        };
+
+        const AudioSys = {
+            ctx: null, isMuted: false, bgmOsc1: null, bgmOsc2: null, bgmGain: null,
+            init() { try { window.AudioContext = window.AudioContext || window.webkitAudioContext; this.ctx = new AudioContext(); this.updateIcon(); } catch(e) {} },
+            toggleSound() { this.isMuted = !this.isMuted; if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); this.updateIcon(); if(this.isMuted) this.stopBGM(); else if(!document.getElementById('screen-menu').classList.contains('hidden-sys') || !document.getElementById('screen-game').classList.contains('hidden-sys')) this.startBGM(); },
+            updateIcon() { const btn = document.getElementById('btn-sound'); if(btn) btn.innerHTML = this.isMuted ? '<i class="fa-solid fa-volume-xmark text-xl"></i> Sound' : '<i class="fa-solid fa-volume-high text-xl"></i> Sound'; },
+            startBGM() {
+                if(this.isMuted || !this.ctx || this.bgmOsc1) return;
+                this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0.08; this.bgmGain.connect(this.ctx.destination);
+                this.bgmOsc1 = this.ctx.createOscillator(); this.bgmOsc1.type = 'sine'; this.bgmOsc1.frequency.value = 82.41; // E2 (Earth Vibe)
+                this.bgmOsc2 = this.ctx.createOscillator(); this.bgmOsc2.type = 'triangle'; this.bgmOsc2.frequency.value = 110.00; // A2
+                this.bgmOsc1.connect(this.bgmGain); this.bgmOsc2.connect(this.bgmGain);
+                this.bgmOsc1.start(); this.bgmOsc2.start();
+            },
+            stopBGM() {
+                if(this.bgmGain) {
+                    this.bgmGain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 1);
+                    setTimeout(() => { if(this.bgmOsc1) { this.bgmOsc1.stop(); this.bgmOsc1.disconnect(); this.bgmOsc1 = null; } if(this.bgmOsc2) { this.bgmOsc2.stop(); this.bgmOsc2.disconnect(); this.bgmOsc2 = null; } }, 1000);
+                }
+            },
+            playTone(freq, type, duration) { 
+                if(this.isMuted || !this.ctx) return; 
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); 
+                osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime); 
+                osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); 
+                gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration); osc.stop(this.ctx.currentTime + duration); 
+                setTimeout(() => { osc.disconnect(); gain.disconnect(); }, (duration * 1000) + 100);
+            },
+            playCorrect() { this.playTone(600, 'sine', 0.1); setTimeout(()=>this.playTone(800, 'sine', 0.2), 100); }, 
+            playError() { this.playTone(200, 'sawtooth', 0.3); }, playGrab() { this.playTone(400, 'square', 0.1); }, playTick() { this.playTone(1000, 'sine', 0.05); },
+            playCountdownBeep() { this.playTone(880, 'sine', 0.1); }, playCountdownGo() { this.playTone(1760, 'sine', 0.3); },
+            playScoreRoll() { if(this.isMuted || !this.ctx) return; let count = 0; let rollInterval = setInterval(() => { this.playTone(800 + (count * 20), 'sine', 0.03); count++; if(count > 25) clearInterval(rollInterval); }, 60); },
+            playTriumph() { if(this.isMuted || !this.ctx) return; this.playTone(523.25, 'sine', 0.1); setTimeout(() => this.playTone(659.25, 'sine', 0.1), 150); setTimeout(() => this.playTone(783.99, 'sine', 0.4), 300); }
+        };
+
+        const GraphicsSys = {
+            scene: null, camera: null, renderer: null, pivot: null, particles1: null, particles2: null, isGraphicsActive: true,
+            init() {
+                const canvas = document.getElementById('bg-canvas');
+                this.scene = new THREE.Scene(); this.scene.fog = new THREE.FogExp2(0x020617, 0.002);
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); this.camera.position.z = 30;
+                this.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true }); this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                
+                this.pivot = new THREE.Group(); this.scene.add(this.pivot);
+                
+                // Earth-like Sphere (Green/Cyan)
+                const earthGeo = new THREE.SphereGeometry(6, 32, 32);
+                const earthMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+                const earth = new THREE.Mesh(earthGeo, earthMat);
+                
+                const coreGeo = new THREE.SphereGeometry(5.8, 16, 16);
+                const coreMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.15 });
+                const core = new THREE.Mesh(coreGeo, coreMat);
+                this.pivot.add(earth, core);
+
+                // Circulation Rings (Atmosphere/Ocean)
+                for(let i=0; i<3; i++) {
+                    const radius = 7 + (i*1.5);
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.05, 16, 100), new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.2 }));
+                    ring.rotation.x = Math.PI / 2 + (Math.random() * 0.4); 
+                    ring.userData = { speedX: (Math.random()-0.5)*0.005, speedY: (Math.random()-0.5)*0.005 };
+                    this.pivot.add(ring);
+                }
+                this.pivot.position.set(0, -5, -15); this.pivot.rotation.x = 0.2;
+                
+                // Particles (Atmosphere flow)
+                const createParticles = (count, size, color, opacity) => {
+                    const geo = new THREE.BufferGeometry(); const pos = new Float32Array(count * 3);
+                    for(let i=0; i<count*3; i++) pos[i] = (Math.random() - 0.5) * 100;
+                    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                    return new THREE.Points(geo, new THREE.PointsMaterial({ size, color, transparent: true, opacity, blending: THREE.AdditiveBlending }));
+                };
+                
+                const pMulti = DeviceSys.isMobile ? 0.3 : 1; 
+                this.particles1 = createParticles(800 * pMulti, 0.2, 0x06b6d4, 0.6); // Cyan Flow
+                this.particles2 = createParticles(500 * pMulti, 0.3, 0x10b981, 0.4); // Emerald Flow
+                this.scene.add(this.particles1, this.particles2);
+
+                window.addEventListener('resize', () => { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); });
+                this.animate();
+            },
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                if(!this.isGraphicsActive) return;
+                if(this.pivot) { 
+                    this.pivot.rotation.y += 0.002; 
+                    this.pivot.children.forEach(child => {
+                        if(child.geometry.type === 'TorusGeometry' && child.userData) {
+                            child.rotation.x += child.userData.speedX; child.rotation.y += child.userData.speedY;
+                        }
+                    });
+                }
+                if(this.particles1) { this.particles1.rotation.y += 0.001; this.particles1.rotation.x += 0.0005; }
+                if(this.particles2) { this.particles2.rotation.y -= 0.0005; this.particles2.rotation.z += 0.001; }
+                this.renderer.render(this.scene, this.camera);
+            }
+        };
+
+        const PoseTrackingSys = {
+            pose: null, camera: null, isReady: false, baseShoulderY: null, isActive: false, lastProcessTime: 0, fallbackMode: false,
+            async init() {
+                const videoElement = document.getElementById('input_video'); const canvasElement = document.getElementById('camera-preview'); const canvasCtx = canvasElement.getContext('2d'); const statusEl = document.getElementById('cam-status');
+                if (DeviceSys.isMobile) { this.enableFallbackMode(); return; }
+                try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Browser API not supported");
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true }); stream.getTracks().forEach(track => track.stop());
+                    this.pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+                    this.pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+                    this.pose.onResults((results) => {
+                        if(!this.isActive || this.fallbackMode) return;
+                        canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height); canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        if (results.poseLandmarks) {
+                            const landmarks = results.poseLandmarks;
+                            drawConnectors(canvasCtx, landmarks, window.POSE_CONNECTIONS || POSE_CONNECTIONS, {color: '#10b981', lineWidth: 2}); // Emerald
+                            drawLandmarks(canvasCtx, landmarks, {color: '#06b6d4', lineWidth: 1, radius: 2}); // Cyan
+                            const bodyCenterX = (landmarks[11].x + landmarks[12].x) / 2; const screenXRatio = 1 - bodyCenterX;
+                            const currentShoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+                            if (this.baseShoulderY === null) this.baseShoulderY = currentShoulderY;
+                            else { if (currentShoulderY < this.baseShoulderY) this.baseShoulderY = (this.baseShoulderY * 0.98) + (currentShoulderY * 0.02); else this.baseShoulderY = (this.baseShoulderY * 0.80) + (currentShoulderY * 0.20); }
+                            let isJumping = false; if (this.baseShoulderY - currentShoulderY > 0.06) isJumping = true; 
+                            GestureSys.updateZone(screenXRatio, isJumping);
+                        } else { GestureSys.hideIndicator(); this.baseShoulderY = null; }
+                        canvasCtx.restore();
+                    });
+                    const frameInterval = 1000 / 24;
+                    this.camera = new Camera(videoElement, { onFrame: async () => { if(!this.isActive || this.fallbackMode) return; const now = Date.now(); if (now - this.lastProcessTime >= frameInterval) { this.lastProcessTime = now; await this.pose.send({image: videoElement}); } }, width: 320, height: 240 });
+                    await this.camera.start(); this.isReady = true; statusEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-video"></i> Camera Active</span>';
+                } catch (error) { this.enableFallbackMode(); }
+            },
+            enableFallbackMode() {
+                this.fallbackMode = true; this.isReady = true; document.getElementById('camera-preview').style.display = 'none';
+                const statusEl = document.getElementById('cam-status'); if(statusEl) statusEl.innerHTML = '<span class="text-cyan-400"><i class="fa-solid fa-hand-pointer"></i> Touch Mode Active</span>';
+            }
+        };
+
+        const GestureSys = {
+            indicatorEl: null, isJumping: false, activeZone: null, jumpCooldown: false, smoothXRatio: 0.5,
+            init() { this.indicatorEl = document.getElementById('player-indicator'); },
+            updateZone(xRatio, isJumpingNow) {
+                if(!this.indicatorEl || PoseTrackingSys.fallbackMode) return;
+                this.smoothXRatio = (this.smoothXRatio * 0.8) + (xRatio * 0.2); const percentX = Math.max(0, Math.min(100, this.smoothXRatio * 100));
+                let currentZone = 1; if (this.smoothXRatio < 0.33) currentZone = 0; else if (this.smoothXRatio > 0.66) currentZone = 2;
+                if (!this.jumpCooldown && !GameState.isAnswering) {
+                    this.indicatorEl.style.display = 'flex'; this.indicatorEl.style.left = `${percentX}%`;
+                    if (this.activeZone !== currentZone) { document.querySelectorAll('.choice-card-v2').forEach(el => el.classList.remove('hovered')); this.activeZone = currentZone; const cards = document.querySelectorAll('.choice-card-v2'); if(cards && cards[currentZone]) cards[currentZone].classList.add('hovered'); }
+                }
+                if (isJumpingNow && !this.isJumping && !this.jumpCooldown && !GameState.isAnswering) {
+                    this.indicatorEl.classList.add('scale-150', 'bg-emerald-400', 'border-white'); setTimeout(() => this.indicatorEl.classList.remove('scale-150', 'bg-emerald-400', 'border-white'), 300);
+                    if (this.activeZone !== null) { const cards = document.querySelectorAll('.choice-card-v2'); if (cards && cards[this.activeZone]) { this.triggerAnswer(this.activeZone, cards[this.activeZone]); } }
+                }
+                this.isJumping = isJumpingNow;
+            },
+            triggerAnswer(zone, cardEl) {
+                this.jumpCooldown = true; setTimeout(() => { this.jumpCooldown = false; }, 2000);
+                AudioSys.playGrab(); let ripple = document.createElement('span'); ripple.className = 'jump-ripple'; cardEl.appendChild(ripple); setTimeout(() => ripple.remove(), 600);
+                cardEl.classList.add('grabbing'); GameSys.checkAnswer(parseInt(cardEl.dataset.index), cardEl); 
+            },
+            hideIndicator() { if(this.indicatorEl) this.indicatorEl.style.display = 'none'; document.querySelectorAll('.choice-card-v2').forEach(el => el.classList.remove('hovered', 'grabbing')); this.activeZone = null; this.isJumping = false; }
+        };
+
+        const DragDropSys = {
+            init() {
+                const selectAnswer = (e) => { if(GameState.isAnswering) return; const card = e.target.closest('.choice-card-v2'); if(!card) return; e.preventDefault(); AudioSys.playGrab(); card.classList.add('grabbing'); GameSys.checkAnswer(parseInt(card.dataset.index), card); };
+                const choicesContainer = document.getElementById('ui-choices'); choicesContainer.addEventListener('mousedown', selectAnswer); choicesContainer.addEventListener('touchstart', selectAnswer, {passive: false});
+            }
+        };
+
+        const QuestionBank = [
+            // ==========================================
+            // STAGE 1: THERMAL BALANCE (สมดุลพลังงานของโลก) - 16 ข้อ
+            // ==========================================
+            { id: "M5_1_01", level: 1, q: "สมดุลพลังงานของโลกหมายถึงเหตุการณ์ในข้อใด?", c: ["พลังงานจากดวงอาทิตย์ถูกดูดซับทั้งหมดโดยชั้นบรรยากาศ", "พลังงานรับจากดวงอาทิตย์เท่ากับพลังงานที่โลกแผ่ออกสู่อวกาศ", "พลังงานจากดวงอาทิตย์ถูกสะท้อนออกไปทั้งหมดโดยไม่ถึงพื้นโลก"], a: 1, cat: "รังสีและพลังงาน", desc: "โลกรับพลังงานคลื่นสั้นจากดวงอาทิตย์ และแผ่พลังงานคลื่นยาวออกสู่อวกาศในปริมาณที่สมดุลกัน ทำให้โลกมีอุณหภูมิคงที่" },
+            { id: "M5_1_02", level: 1, q: "ท้องฟ้าที่เรามองเห็นเป็นสีฟ้าในเวลากลางวัน เกิดจากกระบวนการทางแสงรูปแบบใด?", c: ["การสะท้อนแสงของเมฆหนา", "การดูดกลืนแสงของไอน้ำ", "การกระเจิงแสงแบบเรย์ลี (Rayleigh Scattering)"], a: 2, cat: "บรรยากาศ", desc: "โมเลกุลแก๊สในอากาศทำให้แสงสีน้ำเงินที่มีความยาวคลื่นสั้นกระเจิงออกไปทุกทิศทางได้ดีที่สุด เราจึงเห็นท้องฟ้าเป็นสีฟ้า" },
+            { id: "M5_1_03", level: 1, q: "พื้นผิวโลกในลักษณะใดที่มีค่า 'อัตราส่วนรังสีสะท้อน (Albedo)' สูงที่สุด?", c: ["ป่าไม้ดิบชื้น", "มหาสมุทร", "หิมะและน้ำแข็งสด"], a: 2, cat: "อัลบีโด", desc: "Albedo คืออัตราส่วนการสะท้อนรังสี พื้นผิวสีสว่างอย่างหิมะสามารถสะท้อนรังสีกลับสู่อวกาศได้เกือบ 90%" },
+            { id: "M5_1_04", level: 1, q: "ก๊าซในข้อใดที่มี 'ศักยภาพในการเป็นก๊าซเรือนกระจก' (GWP) สูงที่สุดเมื่อเปรียบเทียบกับคาร์บอนไดออกไซด์?", c: ["สาร CFCs", "มีเทน (CH4)", "ไอน้ำ"], a: 0, cat: "ก๊าซเรือนกระจก", desc: "สาร CFCs ที่มนุษย์สังเคราะห์ขึ้น มีศักยภาพในการกักเก็บความร้อนสูงกว่าคาร์บอนไดออกไซด์หลายพันเท่า" },
+            { id: "M5_1_05", level: 1, q: "การเปลี่ยนสถานะของน้ำในข้อใด มีบทบาทสำคัญในการพาพลังงานความร้อนจากพื้นผิวโลกขึ้นสู่ชั้นบรรยากาศได้มากที่สุด?", c: ["การแข็งตัว", "การระเหย", "การกลั่นตัว"], a: 1, cat: "วัฏจักรน้ำ", desc: "การระเหยเป็นการเปลี่ยนสถานะที่ต้องดึงความร้อนแฝงจากพื้นผิวขึ้นไปสู่ชั้นบรรยากาศพร้อมกับไอน้ำ" },
+            { id: "M5_1_06", level: 1, q: "ในช่วงฤดูร้อนของซีกโลกเหนือจะได้รับรังสีจากดวงอาทิตย์มากกว่าซีกโลกใต้ สาเหตุหลักเกิดจากสิ่งใด?", c: ["แกนหมุนของโลกเอียง ทำให้หันรับแสงดวงอาทิตย์โดยตรง", "ซีกโลกเหนือมีพื้นที่ปกคลุมด้วยน้ำแข็งน้อยกว่า", "โลกโคจรรอบดวงอาทิตย์ใกล้ที่สุดในช่วงนั้นพอดี"], a: 0, cat: "ฤดูกาล", desc: "แกนโลกเอียง 23.5 องศา เมื่อซีกโลกเหนือหันเข้าหาดวงอาทิตย์ รังสีจะตกตั้งฉากและทำให้พื้นที่นั้นมีอุณหภูมิสูงขึ้น (ฤดูร้อน)" },
+            { id: "M5_1_07", level: 1, q: "หากแกนหมุนของโลก 'ไม่เอียง' จะส่งผลต่อสภาพภูมิอากาศบนโลกอย่างไร?", c: ["ซีกโลกเหนือและซีกโลกใต้จะสลับฤดูกาลกันทุกๆ เดือน", "โลกจะมีอุณหภูมิเฉลี่ยสูงขึ้นอย่างต่อเนื่อง", "โลกจะไม่มีการเปลี่ยนแปลงของฤดูกาล"], a: 2, cat: "ฤดูกาล", desc: "แกนโลกที่เอียงทำให้แต่ละพื้นที่รับแสงอาทิตย์ไม่เท่ากันในแต่ละช่วงของปี หากไม่เอียงเลย โลกจะไม่มีฤดูกาล" },
+            { id: "M5_1_08", level: 1, q: "เมฆมีบทบาท 'คู่ขนานที่ขัดแย้งกัน' ต่อสมดุลพลังงานของโลกตามข้อใด?", c: ["ดูดความร้อนแฝง และคายรังสีอัลตราไวโอเลต", "สะท้อนแสงอาทิตย์ทำให้โลกเย็นลง และกักเก็บอินฟราเรดทำให้โลกอุ่นขึ้น", "กรองรังสีคอสมิก และเพิ่มปริมาณก๊าซเรือนกระจก"], a: 1, cat: "บรรยากาศ", desc: "เมฆสว่างช่วยสะท้อนแสงอาทิตย์ (Albedo สูง) ทำให้โลกเย็นลง แต่ในขณะเดียวกันก็สามารถดูดซับรังสีอินฟราเรดจากพื้นโลกทำให้โลกอุ่นขึ้นด้วย" },
+            { id: "M5_1_09", level: 1, q: "เหตุใดโลกของเราจึงได้รับพลังงานจากดวงอาทิตย์ไม่เท่ากันในแต่ละพื้นที่?", c: ["โลกมีรูปร่างทรงกลมและแกนโลกเอียง", "ปริมาณก๊าซเรือนกระจกในบรรยากาศไม่เท่ากัน", "ความใกล้ไกลของวงโคจรแตกต่างกันมาก"], a: 0, cat: "รังสีและพลังงาน", desc: "รังสีตกกระทบพื้นผิวโลกที่เป็นทรงกลมด้วยมุมที่ต่างกัน ประกอบกับแกนที่เอียงทำให้แต่ละละติจูดรับความร้อนไม่เท่ากัน" },
+            { id: "M5_1_10", level: 1, q: "ความร้อนจากดวงอาทิตย์เดินทางมาถึงโลกได้โดยไม่ต้องอาศัยตัวกลาง เป็นการถ่ายโอนความร้อนด้วยวิธีใด?", c: ["การนำความร้อน", "การพาความร้อน", "การแผ่รังสี"], a: 2, cat: "รังสีและพลังงาน", desc: "ความร้อนจากดวงอาทิตย์เดินทางผ่านอวกาศที่เป็นสุญญากาศด้วยรูปแบบคลื่นแม่เหล็กไฟฟ้า เรียกว่า 'การแผ่รังสี' (Radiation)" },
+            { id: "M5_1_11", level: 1, q: "เมื่อภูเขาไฟระเบิดพ่นละอองซัลเฟตจำนวนมากเข้าสู่บรรยากาศ จะเกิดผลกระทบต่ออุณหภูมิโลกอย่างไร?", c: ["อุณหภูมิโลกสูงขึ้นทันที จากความร้อนของลาวา", "ไม่มีผลต่ออุณหภูมิ เพราะละอองลอยสลายตัวในทันที", "อุณหภูมิโลกลดลงชั่วคราว เพราะละอองสะท้อนแสงอาทิตย์"], a: 2, cat: "การเปลี่ยนแปลงภูมิอากาศ", desc: "ละอองลอย (Aerosol) ทำหน้าที่เหมือนร่มเงาที่คอยสะท้อนรังสีดวงอาทิตย์กลับสู่อวกาศ ทำให้พื้นโลกเย็นลงชั่วคราว" },
+            { id: "M5_1_12", level: 1, q: "หากธารน้ำแข็งละลายอย่างต่อเนื่อง จะทำให้เกิด 'วงจรป้อนกลับแบบบวก (Positive Feedback)' ตามข้อใด?", c: ["พื้นที่น้ำแข็งลดลง -> อัตราการสะท้อน (Albedo) ลดลง -> โลกร้อนขึ้นอีก", "พื้นที่น้ำแข็งลดลง -> อัตราการสะท้อน (Albedo) เพิ่มขึ้น -> โลกเย็นลง", "น้ำแข็งละลาย -> ปริมาณน้ำฝนเพิ่มขึ้น -> โลกเย็นลง"], a: 0, cat: "การเปลี่ยนแปลงภูมิอากาศ", desc: "เมื่อน้ำแข็งละลาย พื้นผิวสีขาว (Albedo สูง) จะถูกแทนที่ด้วยน้ำสีเข้ม (Albedo ต่ำ) ทำให้ดูดซับความร้อนมากขึ้น และเร่งให้น้ำแข็งละลายเร็วขึ้นไปอีก" },
+            { id: "M5_1_30", level: 1, q: "กระบวนการที่แสงอาทิตย์ชนอนุภาคในบรรยากาศแล้ว 'กระจายออกทุกทิศทาง' โดยไม่ถูกดูดซับ เรียกว่าอะไร?", c: ["การหักเห (Refraction)", "การสะท้อน (Reflection)", "การกระเจิง (Scattering)"], a: 2, cat: "บรรยากาศ", desc: "การกระเจิงของแสง (Scattering) โดยโมเลกุลแก๊สในอากาศ เป็นสาเหตุหลักที่ทำให้เรามองเห็นท้องฟ้าเป็นสีฟ้า" },
+            { id: "M5_1_31", level: 1, q: "บริเวณขั้วโลกมีอุณหภูมิต่ำเพราะหิมะและน้ำแข็งมีค่าใด 'สูงมาก' ทำให้สะท้อนความร้อนออกไปได้ดี?", c: ["ความจุความร้อน (Heat capacity)", "อัลบีโด (Albedo)", "ความกดอากาศ (Air pressure)"], a: 1, cat: "อัลบีโด", desc: "พื้นผิวสีขาวของหิมะและน้ำแข็งมีค่าอัลบีโดสูงมาก จึงสามารถสะท้อนรังสีดวงอาทิตย์กลับสู่อวกาศได้เกือบทั้งหมด" },
+            { id: "M5_1_35", level: 1, q: "หากโลกใบนี้ไม่มี 'ก๊าซเรือนกระจก' เลย ผลกระทบหลักที่จะเกิดขึ้นคืออะไร?", c: ["โลกร้อนจัดจนน้ำระเหยหมด", "โลกจะหนาวเย็นจัดจนสิ่งมีชีวิตอาศัยอยู่ไม่ได้", "กลางวันจะร้อนจัด แต่กลางคืนจะอุ่นขึ้น"], a: 1, cat: "ก๊าซเรือนกระจก", desc: "ก๊าซเรือนกระจกทำหน้าที่เหมือนผ้าห่ม หากไม่มีผ้าห่มนี้ ความร้อนจะหลุดรอดสู่อวกาศทั้งหมด ทำให้โลกอุณหภูมิเฉลี่ยติดลบ 18 องศาเซลเซียส" },
+            { id: "M5_1_36", level: 1, q: "นโยบายเปลี่ยนหลังคาอาคารและถนนให้เป็น 'สีสว่าง' อาศัยหลักการวิทยาศาสตร์เพื่อเพิ่มสิ่งใด?", c: ["อัตราการสะท้อนรังสี (Albedo)", "การดูดกลืนความร้อน", "การกระเจิงของแสง"], a: 0, cat: "อัลบีโด", desc: "สีสว่างมีค่า Albedo สูง ช่วยสะท้อนรังสีกลับสู่อวกาศ เป็นการลดปรากฏการณ์เกาะความร้อนในเมือง (Urban Heat Island)" },
+            
+            // ==========================================
+            // STAGE 2: ATMOS NAVIGATOR (การหมุนเวียนของอากาศ) - 14 ข้อ
+            // ==========================================
+            { id: "M5_2_13", level: 2, q: "ในสภาวะปกติ อากาศจะมีการเคลื่อนที่จากบริเวณใดไปบริเวณใดเสมอ?", c: ["จากบริเวณอุณหภูมิสูงไปอุณหภูมิต่ำ", "จากขั้วโลกไปเส้นศูนย์สูตรเป็นเส้นตรง", "จากบริเวณความกดอากาศสูง ไป ความกดอากาศต่ำ"], a: 2, cat: "หลักการเกิดลม", desc: "ลมเกิดจากความแตกต่างของความกดอากาศ อากาศที่เย็นและหนักกว่า (ความกดอากาศสูง) จะพัดไปแทนที่อากาศร้อนที่ลอยตัวขึ้น (ความกดอากาศต่ำ)" },
+            { id: "M5_2_14", level: 2, q: "ค่าความกดอากาศมาตรฐานที่ระดับน้ำทะเลมีค่าเท่าใด?", c: ["1000.00 hPa", "1013.25 hPa", "1025.50 hPa"], a: 1, cat: "ความกดอากาศ", desc: "ค่าความกดอากาศมาตรฐานที่ระดับน้ำทะเลคือ 1 บรรยากาศ (atm) หรือมีค่าเท่ากับ 1013.25 เฮกโตพาสคัล (hPa)" },
+            { id: "M5_2_15", level: 2, q: "แรงคอริออลิส (Coriolis force) ที่ทำให้ทิศทางลมเบี่ยงเบนไปทางขวาในซีกโลกเหนือ เกิดจากสิ่งใด?", c: ["การโคจรรอบดวงอาทิตย์ของโลก", "การหมุนรอบตัวเองของโลก", "แรงโน้มถ่วงของดวงจันทร์"], a: 1, cat: "แรงคอริออลิส", desc: "เนื่องจากโลกหมุนรอบตัวเอง ทำให้วัตถุที่เคลื่อนที่พาดผ่านพื้นผิวโลกดูเหมือนถูกเหวี่ยงเบนไปจากเส้นตรง (ซีกเหนือเบนขวา ซีกใต้เบนซ้าย)" },
+            { id: "M5_2_16", level: 2, q: "แรงคอริออลิส ทำให้ลมใน 'ซีกโลกใต้' เบนไปทางทิศใด?", c: ["เบนไปทางขวา", "เบนไปทางซ้าย", "พัดขึ้นในแนวดิ่ง"], a: 1, cat: "แรงคอริออลิส", desc: "ตามกฎของแรงคอริออลิส ซีกโลกเหนือวัตถุจะเบนไปทางขวา ส่วนซีกโลกใต้จะเบนไปทางซ้ายของทิศทางการเคลื่อนที่" },
+            { id: "M5_2_17", level: 2, q: "เซลล์การหมุนเวียนอากาศแบบใดที่ส่งผลให้ ภูมิภาคเอเชียตะวันออกเฉียงใต้ มีอากาศร้อนชื้นและฝนตกชุก?", c: ["แฮดลีย์เซลล์ (Hadley Cell)", "เฟอร์เรลเซลล์ (Ferrel Cell)", "โพลาร์เซลล์ (Polar Cell)"], a: 0, cat: "การหมุนเวียนอากาศ", desc: "Hadley Cell เป็นการหมุนเวียนของอากาศในเขตร้อน (0-30 องศา) อากาศร้อนชื้นลอยตัวบริเวณศูนย์สูตร ทำให้เกิดเมฆและฝนตกชุก" },
+            { id: "M5_2_18", level: 2, q: "ปัจจัยในข้อใดที่ทำให้รูปแบบการหมุนเวียนอากาศแบบเซลล์เดียว (ลมพัดจากขั้วโลกถึงศูนย์สูตร) ใช้จริงกับโลกไม่ได้?", c: ["การหมุนรอบตัวเองของโลก", "ปริมาณความร้อนจากดวงอาทิตย์", "แรงโน้มถ่วงของดวงจันทร์"], a: 0, cat: "การหมุนเวียนอากาศ", desc: "เพราะโลกมีการหมุนรอบตัวเอง ทำให้เกิดแรงคอริออลิส ลมจึงถูกเบี่ยงเบนและแตกออกเป็น 3 เซลล์ย่อย ไม่สามารถพัดยาวรวดเดียวได้" },
+            { id: "M5_2_19", level: 2, q: "ปัจจัยใดที่มีผล 'ต้าน' การเคลื่อนที่ของอากาศ ทำให้ความเร็วลมบริเวณใกล้ผิวโลกลดลง?", c: ["แรงคอริออลิส", "แรงความชันความกดอากาศ", "แรงเสียดทาน (Friction)"], a: 2, cat: "ความเร็วลม", desc: "แรงเสียดทานจากภูมิประเทศ ภูเขา ต้นไม้ หรืออาคาร จะต้านการเคลื่อนที่ของลม ทำให้ลมบริเวณใกล้ผิวโลกพัดช้ากว่าลมในระดับสูง" },
+            { id: "M5_2_20", level: 2, q: "หากโลก 'ไม่หมุนรอบตัวเอง' ลักษณะการเคลื่อนที่ของลมบนโลกจะเป็นอย่างไร?", c: ["เคลื่อนที่เป็นเส้นตรงตามแนวละติจูด", "เคลื่อนที่เป็นเส้นตรงจากขั้วโลกมาที่ศูนย์สูตร", "พัดหมุนวนเป็นพายุไซโคลนตลอดเวลา"], a: 1, cat: "หลักการเกิดลม", desc: "ถ้าโลกไม่หมุน จะไม่มีแรงคอริออลิส ลมจะพัดเป็นเส้นตรงจากบริเวณความกดอากาศสูง (ขั้วโลก) มายังบริเวณความกดอากาศต่ำ (ศูนย์สูตร)" },
+            { id: "M5_2_21", level: 2, q: "การหมุนเวียนอากาศแบบ เฟอร์เรลเซลล์ (Ferrel Cell) ครอบคลุมพื้นที่ในช่วงละติจูดใด?", c: ["0 - 30 องศา", "30 - 60 องศา", "60 - 90 องศา"], a: 1, cat: "การหมุนเวียนอากาศ", desc: "Ferrel Cell เป็นเซลล์หมุนเวียนในละติจูดกลาง (30-60 องศา) ซึ่งเชื่อมต่อระหว่าง Hadley Cell และ Polar Cell" },
+            { id: "M5_2_22", level: 2, q: "พื้นที่ 'ทะเลทราย' ขนาดใหญ่ส่วนมากของโลก (เช่น ซาฮารา) มักพบตั้งอยู่ในบริเวณละติจูดใด?", c: ["0 องศา (เส้นศูนย์สูตร)", "30 องศา (เหนือและใต้)", "60 องศา (เหนือและใต้)"], a: 1, cat: "สภาพภูมิอากาศ", desc: "บริเวณละติจูด 30 องศา เป็นจุดที่มวลอากาศแห้งจาก Hadley Cell จมตัวลง ทำให้บริเวณนี้มีความกดอากาศสูง ท้องฟ้าโปร่ง และแห้งแล้งกลายเป็นทะเลทราย" },
+            { id: "M5_2_23", level: 2, q: "ลมประจำถิ่นชนิดใด ที่เกิดจากการหมุนเวียนแบบแฮดลีย์เซลล์ และพัดเข้าหาเส้นศูนย์สูตร?", c: ["ลมค้า (Trade Winds)", "ลมตะวันตก (Westerlies)", "ลมมรสุม (Monsoon)"], a: 0, cat: "ระบบลม", desc: "ลมค้าเกิดจากมวลอากาศที่จมตัวบริเวณละติจูด 30 องศา พัดกลับเข้าหาความกดอากาศต่ำที่เส้นศูนย์สูตร" },
+            { id: "M5_2_32", level: 2, q: "การที่ลมในซีกโลกเหนือเบี่ยงเบนไปทางขวาแทนที่จะพัดเป็นเส้นตรง เป็นผลมาจากแรงใด?", c: ["แรงสู่ศูนย์กลาง", "แรงเสียดทาน", "แรงคอริออลิส"], a: 2, cat: "แรงคอริออลิส", desc: "แรงคอริออลิส (Coriolis force) เป็นผลโดยตรงมาจากการหมุนรอบตัวเองของโลก" },
+            { id: "M5_2_37", level: 2, q: "เมื่อเครื่องบินบินจากขั้วโลกเหนือสู่เส้นศูนย์สูตรแล้วพบว่าออกนอกเส้นทาง เกิดจากแรงใดและเบี่ยงไปทางใด?", c: ["แรงสู่ศูนย์กลาง, เบี่ยงซ้าย", "แรงคอริออลิส, เบี่ยงขวา", "แรงเสียดทาน, ไม่เบี่ยงเบน"], a: 1, cat: "แรงคอริออลิส", desc: "แรงคอริออลิสทำให้วัตถุที่เคลื่อนที่ในซีกโลกเหนือ เบี่ยงไปทางขวาของทิศทางการเคลื่อนที่เสมอ" },
+            { id: "M5_2_38", level: 2, q: "มรสุมตะวันตกเฉียงใต้ และ มรสุมตะวันออกเฉียงเหนือ ส่งผลต่อภูมิอากาศประเทศไทยอย่างไรตามลำดับ?", c: ["หนาวเย็นแห้งแล้ง / ชุ่มชื้นมีฝน", "ชุ่มชื้นมีฝนตกชุก / หนาวเย็นแห้งแล้ง", "พายุฤดูร้อนรุนแรง / อากาศร้อนจัด"], a: 1, cat: "มรสุม", desc: "ลมตะวันตกเฉียงใต้พัดพาความชื้นจากทะเลอันดามันมาตกเป็นฝน ส่วนลมตะวันออกเฉียงเหนือพัดพาความหนาวเย็นจากจีนแผ่นดินใหญ่ลงมา" },
+
+            // ==========================================
+            // STAGE 3: ABYSS CURRENT (การหมุนเวียนของน้ำในมหาสมุทร) - 8 ข้อ
+            // ==========================================
+            { id: "M5_3_24", level: 3, q: "ชั้นน้ำในมหาสมุทรที่มีอุณหภูมิลดลงอย่างรวดเร็วตามความลึก และกั้นไม่ให้น้ำชั้นบนและชั้นล่างผสมกัน เรียกว่าอะไร?", c: ["ชั้นฮาโลไคลน์ (Halocline)", "ชั้นเทอร์โมไคลน์ (Thermocline)", "ชั้นน้ำผสม (Mixed Layer)"], a: 1, cat: "โครงสร้างมหาสมุทร", desc: "เทอร์โมไคลน์เป็นชั้นรอยต่อ (ความลึกประมาณ 200-1000m) ที่อุณหภูมิน้ำดิ่งลงอย่างรวดเร็วตามความลึก" },
+            { id: "M5_3_25", level: 3, q: "ปัจจัยหลัก 2 ประการที่ทำให้เกิดการหมุนเวียนของมวลน้ำในแนวดิ่ง (กระแสน้ำลึก หรือ สายพานลำเลียงโลก) คืออะไร?", c: ["อุณหภูมิ และ ความเค็ม", "ลมค้า และ แรงคอริออลิส", "รูปร่างของทวีป และ ความลึกก้นทะเล"], a: 0, cat: "กระแสน้ำ", desc: "ความแตกต่างของอุณหภูมิ (Thermo) และความเค็ม (Haline) ทำให้น้ำมีความหนาแน่นต่างกัน เกิดเป็นกระแสน้ำลึก (Thermohaline Circulation)" },
+            { id: "M5_3_26", level: 3, q: "ค่าเฉลี่ยความเค็มของน้ำในมหาสมุทรบนโลกอยู่ที่ประมาณเท่าใด?", c: ["15 PSU", "25 PSU", "35 PSU"], a: 2, cat: "ความเค็ม", desc: "ความเค็มเฉลี่ยของน้ำทะเลทั่วโลกคือ 35 PSU (เทียบเท่ากับเกลือ 35 กรัม ละลายอยู่ในน้ำทะเล 1 กิโลกรัม)" },
+            { id: "M5_3_27", level: 3, q: "ปรากฏการณ์น้ำผุด (Upwelling) และน้ำจม (Downwelling) บริเวณชายฝั่ง เกิดจากอิทธิพลของสิ่งใดเป็นหลัก?", c: ["แรงโน้มถ่วงของดวงจันทร์และดวงอาทิตย์", "การพัดของลมขนานชายฝั่งและแรงคอริออลิส", "ความแตกต่างของอุณหภูมิน้ำบริเวณศูนย์สูตร"], a: 1, cat: "กระแสน้ำ", desc: "เมื่อลมพัดขนานชายฝั่ง แรงคอริออลิสจะพัดมวลน้ำผิวน้ำออกห่างจากฝั่ง (Ekman Transport) ทำให้น้ำลึกที่เย็นกว่าผุดขึ้นมาแทนที่" },
+            { id: "M5_3_28", level: 3, q: "ปรากฏการณ์น้ำผุด (Upwelling) บริเวณชายฝั่ง มีความสำคัญต่อระบบนิเวศทางทะเลอย่างไร?", c: ["นำพาสารอาหารจากน้ำลึกขึ้นสู่ผิวน้ำ ทำให้สัตว์น้ำชุกชุม", "นำพาน้ำอุ่นขึ้นมาช่วยให้ปะการังเจริญเติบโตอย่างรวดเร็ว", "ช่วยเจือจางความเค็มของน้ำทะเลบริเวณชายฝั่ง"], a: 0, cat: "ระบบนิเวศทางทะเล", desc: "น้ำลึกที่ผุดขึ้นมาอุดมไปด้วยแร่ธาตุและสารอาหาร (Nutrients) เป็นแหล่งอาหารชั้นดีให้แพลงก์ตอน ทำให้บริเวณนั้นเป็นแหล่งประมงที่อุดมสมบูรณ์" },
+            { id: "M5_3_29", level: 3, q: "ทำไมบริเวณปากแม่น้ำสายใหญ่ หรือบริเวณเส้นศูนย์สูตรที่มีฝนตกชุก น้ำทะเลจึงมีความเค็มน้อยกว่าปกติ?", c: ["เพราะอุณหภูมิน้ำต่ำกว่าปกติทำให้อยู่ในสถานะเจือจาง", "เพราะมีน้ำจืดไหลลงมาเจือจางความเค็มของน้ำทะเล", "เพราะเกิดกระบวนการน้ำจมพาสารละลายเกลือลงไปลึก"], a: 1, cat: "ความเค็ม", desc: "ปริมาณน้ำฝนที่ตกลงมา และน้ำจืดจากแม่น้ำที่ไหลลงสู่ทะเล จะช่วยเจือจางปริมาณเกลือ ทำให้บริเวณนั้นมีความเค็มน้อยกว่าบริเวณที่น้ำระเหยสูง" },
+            { id: "M5_3_33", level: 3, q: "ชั้นน้ำมหาสมุทรที่ระดับความลึก 200-1,000 เมตร ซึ่งมี 'อุณหภูมิลดลงอย่างรวดเร็ว' เรียกว่าชั้นใด?", c: ["ชั้นฮาโลไคลน์ (Halocline)", "ชั้นเทอร์โมไคลน์ (Thermocline)", "ชั้นพิกโนไคลน์ (Pycnocline)"], a: 1, cat: "โครงสร้างมหาสมุทร", desc: "เทอร์โมไคลน์ (Thermocline) ทำหน้าที่กั้นไม่ให้น้ำอุ่นชั้นบนผสมกับน้ำเย็นจัดชั้นล่าง" },
+            { id: "M5_3_34", level: 3, q: "ปรากฏการณ์ที่อุณหภูมิผิวน้ำแปซิฟิกฝั่งตะวันออกเย็นกว่าปกติ ส่งผลให้ประเทศไทยและออสเตรเลียมีฝนตกหนัก คือปรากฏการณ์ใด?", c: ["ปรากฏการณ์เอลนีโญ (El Niño)", "ปรากฏการณ์ลานีญา (La Niña)", "ร่องมรสุมกำลังแรง (Monsoon Trough)"], a: 1, cat: "เอลนีโญ-ลานีญา", desc: "ลานีญาเกิดจากลมค้าพัดแรงกว่าปกติ ดันมวลน้ำอุ่นและความชื้นมหาศาลมาทับถมฝั่งแปซิฟิกตะวันตก (ฝั่งเอเชีย) ทำให้มีฝนตกชุกและน้ำท่วมบ่อยครั้ง" }
+        ];
+
+        const GameState = {
+            student: { studentId: "", firstName: "", lastName: "" }, attemptId: "",
+            currentStage: 1, score: 0, energy: 5, combo: 0, timer: 30, qIndex: 0,
+            activeQuestions: [], startTime: 0, stats: { correct: 0, wrong: 0, timeUsed: 0 },
+            questionResults: [], isAnswering: false, timerInterval: null, currentChoicesMap: [] 
+        };
+
+        const GameSys = {
+            startCountdown(stageNum) {
+                GameState.currentStage = stageNum || 1;
+                const pNameEl = document.getElementById('ui-player-name'); pNameEl.innerText = `${GameState.student.firstName} ${GameState.student.lastName.substring(0,1)}.`;
+                if(AudioSys.ctx && AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+                document.getElementById('screen-menu').classList.add('hidden-sys'); document.getElementById('screen-countdown').classList.remove('hidden-sys');
+                PoseTrackingSys.isActive = true;
+                
+                let count = 3; const cdText = document.getElementById('countdown-text');
+                cdText.innerText = count; cdText.className = "text-8xl sm:text-9xl font-sci font-bold text-emerald-400 drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] countdown-pop";
+                AudioSys.playCountdownBeep();
+
+                const cdInterval = setInterval(() => {
+                    count--; cdText.classList.remove('countdown-pop'); void cdText.offsetWidth; 
+                    if (count > 0) { cdText.innerText = count; cdText.classList.add('countdown-pop'); AudioSys.playCountdownBeep(); } 
+                    else if (count === 0) { cdText.innerText = "LINK START!"; cdText.className = "text-6xl sm:text-8xl font-sci font-bold text-cyan-400 drop-shadow-[0_0_40px_rgba(6,182,212,0.8)] countdown-go"; AudioSys.playCountdownGo(); } 
+                    else { clearInterval(cdInterval); document.getElementById('screen-countdown').classList.add('hidden-sys'); this.actuallyStartGame(); }
+                }, 1000);
+            },
+            actuallyStartGame() {
+                document.getElementById('screen-result').classList.add('hidden-sys'); document.getElementById('screen-game').classList.remove('hidden-sys');
+                if(!PoseTrackingSys.fallbackMode) document.getElementById('camera-preview').classList.remove('hidden-sys');
+
+                GameState.attemptId = `GEOSPHERE-S${GameState.currentStage}-` + Date.now() + "-" + Math.floor(Math.random()*1000); GameState.questionResults = [];
+                const pool = QuestionBank.filter(q => q.level === GameState.currentStage); const shuffled = [...pool].sort(() => 0.5 - Math.random());
+                GameState.activeQuestions = shuffled.slice(0, 5); 
+                GameState.score = 0; GameState.energy = 5; GameState.combo = 0; GameState.qIndex = 0; GameState.stats = { correct: 0, wrong: 0, timeUsed: 0 }; GameState.startTime = Date.now();
+                this.updateUI(); this.loadQuestion();
+            },
+            returnToMenu() { this.clearTimer(); document.getElementById('screen-game').classList.add('hidden-sys'); document.getElementById('screen-result').classList.add('hidden-sys'); document.getElementById('screen-menu').classList.remove('hidden-sys'); PoseTrackingSys.isActive = false; },
+            updateUI() {
+                document.getElementById('ui-stage-indicator').innerText = `STAGE ${GameState.currentStage}`; document.getElementById('ui-qnum').innerText = GameState.qIndex + 1;
+                document.getElementById('ui-score').innerText = GameState.score.toString(); document.getElementById('ui-combo').innerText = `x${GameState.combo}`;
+                let heartsHtml = ''; for(let i=0; i<5; i++) heartsHtml += i < GameState.energy ? '<i class="fa-solid fa-heart drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]"></i>' : '<i class="fa-regular fa-heart text-slate-700"></i>';
+                document.getElementById('ui-energy').innerHTML = heartsHtml; 
+            },
+            loadQuestion() {
+                if (GameState.qIndex >= 5 || GameState.energy <= 0) { this.endGame(); return; }
+                GameState.isAnswering = false; GameState.timer = 30; this.updateTimerUI();
+                const q = GameState.activeQuestions[GameState.qIndex];
+                
+                const stageNames = ["THERMAL BALANCE", "ATMOS NAVIGATOR", "ABYSS CURRENT"];
+                document.getElementById('ui-category').innerText = `STAGE ${GameState.currentStage} : ${stageNames[GameState.currentStage-1]}`; document.getElementById('ui-question').innerText = q.q;
+                
+                const dz = document.getElementById('question-container'); dz.classList.remove('success', 'error');
+                const overlay = document.getElementById('question-result-overlay'); overlay.classList.add('opacity-0'); overlay.classList.remove('opacity-100'); document.getElementById('question-result-desc').classList.add('hidden');
+                
+                // Shuffle logic
+                let choices = q.c.map((text, index) => ({ text, originalIndex: index })); choices.sort(() => Math.random() - 0.5);
+                GameState.currentChoicesMap = choices.map(ch => ch.originalIndex);
+
+                const choicesDiv = document.getElementById('ui-choices'); choicesDiv.innerHTML = '';
+                const hexColors = ['#06b6d4', '#10b981', '#3b82f6']; // Cyan, Emerald, Blue
+
+                choices.forEach((choiceObj, idx) => {
+                    const hex = hexColors[idx]; const btn = document.createElement('div'); 
+                    btn.className = 'choice-card-v2 p-4 sm:p-6 flex flex-row sm:flex-col items-center gap-3 sm:gap-4 justify-start sm:justify-center w-full'; btn.style.setProperty('--card-color', hex); btn.dataset.index = idx; 
+                    btn.innerHTML = `<div class="circle-num w-8 h-8 sm:w-10 sm:h-10 text-sm sm:text-xl">${idx + 1}</div><div class="font-semibold text-xs sm:text-base md:text-lg text-left sm:text-center leading-tight flex-1 px-1">${choiceObj.text}</div>`;
+                    choicesDiv.appendChild(btn);
+                });
+                this.startTimer();
+            },
+            startTimer() {
+                this.clearTimer(); const timerBox = document.getElementById('ui-timer-circle'); const timerText = document.getElementById('ui-timer');
+                timerBox.classList.remove('timer-warning'); timerText.classList.remove('timer-warning-text'); timerBox.style.setProperty('--timer-pct', '100%');
+                GameState.timerInterval = setInterval(() => { 
+                    GameState.timer--; this.updateTimerUI(); 
+                    if(GameState.timer <= 5 && GameState.timer > 0) { AudioSys.playTick(); timerBox.classList.add('timer-warning'); timerText.classList.add('timer-warning-text'); } 
+                    if(GameState.timer <= 0) this.handleTimeOut(); 
+                }, 1000);
+            },
+            clearTimer() { if(GameState.timerInterval) { clearInterval(GameState.timerInterval); GameState.timerInterval = null; } },
+            updateTimerUI() { document.getElementById('ui-timer').innerText = GameState.timer; const pct = (GameState.timer / 30) * 100; document.getElementById('ui-timer-circle').style.setProperty('--timer-pct', `${pct}%`); },
+            checkAnswer(selectedIndex, cardElement) {
+                if (GameState.isAnswering) return; GameState.isAnswering = true; this.clearTimer();
+                const q = GameState.activeQuestions[GameState.qIndex]; const originalIndexSelected = GameState.currentChoicesMap[selectedIndex]; const isCorrect = (originalIndexSelected === q.a); 
+                const timeTaken = 30 - GameState.timer; GameState.stats.timeUsed += timeTaken;
+                const dz = document.getElementById('question-container'); const overlay = document.getElementById('question-result-overlay'); const desc = document.getElementById('question-result-desc');
+                overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100'); desc.innerText = q.desc; desc.classList.remove('hidden');
+                let pointsEarned = 0;
+                
+                if (isCorrect) {
+                    AudioSys.playCorrect(); dz.classList.add('success'); 
+                    let baseScore = 10; let speedScore = (GameState.timer >= 20) ? 5 : 0; const comboBonuses = [0, 3, 5, 7, 10]; let comboBonus = comboBonuses[Math.min(GameState.combo, 4)];
+                    GameState.combo++; pointsEarned = baseScore + speedScore + comboBonus;
+                    
+                    let ptsHtml = `<span>+${baseScore} BASE</span>`; 
+                    if (speedScore > 0) ptsHtml += `<span class='text-fuchsia-400'>+${speedScore} SPEED</span>`; 
+                    if (comboBonus > 0) ptsHtml += `<span class='text-amber-400'>+${comboBonus} COMBO</span>`;
+
+                    document.getElementById('question-result-icon').innerHTML = '<i class="fa-solid fa-circle-check text-green-400"></i>';
+                    document.getElementById('question-result-text').className = "text-2xl sm:text-4xl font-bold font-sci tracking-widest text-green-400"; document.getElementById('question-result-text').innerText = "CORRECT";
+                    document.getElementById('question-result-pts').className = "text-sm sm:text-xl font-bold font-sci tracking-widest text-cyan-400 mt-2 flex gap-3"; document.getElementById('question-result-pts').innerHTML = ptsHtml;
+                    GameState.score += pointsEarned; GameState.stats.correct++;
+                } else {
+                    GameState.combo = 0; AudioSys.playError(); dz.classList.add('error'); pointsEarned = -5;
+                    document.getElementById('question-result-icon').innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500"></i>';
+                    document.getElementById('question-result-text').className = "text-2xl sm:text-4xl font-bold font-sci tracking-widest text-red-500"; document.getElementById('question-result-text').innerText = "INCORRECT";
+                    document.getElementById('question-result-pts').className = "text-sm sm:text-xl font-bold font-sci tracking-widest text-red-400 mt-2 flex gap-3"; document.getElementById('question-result-pts').innerHTML = "<span>-5 POINTS</span><span>-1 ENERGY</span>";
+                    GameState.score = Math.max(0, GameState.score - 5); GameState.energy--; GameState.stats.wrong++;
+                }
+                GameState.questionResults.push({ questionId: q.id, category: q.cat, question: q.q, studentAnswer: q.c[originalIndexSelected], correctAnswer: q.c[q.a], result: isCorrect ? "correct" : "wrong", score: pointsEarned, timeUsed: timeTaken, questionOrder: GameState.qIndex + 1 });
+                this.updateUI(); setTimeout(() => { this.nextQuestion(); }, 4500);
+            },
+            handleTimeOut() {
+                GameState.isAnswering = true; this.clearTimer(); AudioSys.playError(); GameState.combo = 0; 
+                const q = GameState.activeQuestions[GameState.qIndex]; const timeTaken = 30; GameState.stats.timeUsed += timeTaken;
+                const dz = document.getElementById('question-container'); const overlay = document.getElementById('question-result-overlay'); const desc = document.getElementById('question-result-desc');
+                dz.classList.add('error'); overlay.classList.remove('opacity-0'); overlay.classList.add('opacity-100'); desc.innerText = q.desc; desc.classList.remove('hidden');
+                document.getElementById('question-result-icon').innerHTML = '<i class="fa-solid fa-clock text-red-500"></i>';
+                document.getElementById('question-result-text').className = "text-2xl sm:text-4xl font-bold font-sci tracking-widest text-red-500"; document.getElementById('question-result-text').innerText = "TIME OUT";
+                document.getElementById('question-result-pts').className = "text-sm sm:text-xl font-bold font-sci tracking-widest text-red-400 mt-2 flex gap-3"; document.getElementById('question-result-pts').innerHTML = "<span>0 POINTS</span><span>-1 ENERGY</span>";
+                GameState.energy--; GameState.stats.wrong++;
+                GameState.questionResults.push({ questionId: q.id, category: q.cat, question: q.q, studentAnswer: "TIMEOUT", correctAnswer: q.c[q.a], result: "wrong", score: 0, timeUsed: timeTaken, questionOrder: GameState.qIndex + 1 });
+                this.updateUI(); setTimeout(() => { this.nextQuestion(); }, 4500);
+            },
+            nextQuestion() { GameState.qIndex++; if (GameState.energy <= 0 || GameState.qIndex >= 5) this.endGame(); else this.loadQuestion(); },
+            animateValue(obj, start, end, duration, suffix = "") {
+                let startTimestamp = null;
+                const step = (timestamp) => {
+                    if (!startTimestamp) startTimestamp = timestamp; const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                    obj.innerText = Math.floor(progress * (end - start) + start) + suffix;
+                    if (progress < 1) window.requestAnimationFrame(step); else obj.innerText = end + suffix;
+                };
+                window.requestAnimationFrame(step);
+            },
+            endGame() {
+                this.clearTimer(); const totalTimeSec = GameState.stats.timeUsed; const min = Math.floor(totalTimeSec / 60).toString().padStart(2, '0'); const sec = (totalTimeSec % 60).toString().padStart(2, '0'); const completed = GameState.energy > 0;
+                const hsKey = `geo_hs_${GameState.student.studentId}`; let currentHs = parseInt(localStorage.getItem(hsKey) || 0);
+                if(GameState.score > 0) { let totalScore = currentHs + GameState.score; localStorage.setItem(hsKey, totalScore); document.getElementById('display-high-score').innerText = totalScore; }
+                PoseTrackingSys.isActive = false; document.getElementById('screen-game').classList.add('hidden-sys'); document.getElementById('screen-result').classList.remove('hidden-sys'); document.getElementById('camera-preview').classList.add('hidden-sys'); 
+                const btnPrimary = document.getElementById('btn-primary-action'); btnPrimary.disabled = true; btnPrimary.classList.add('opacity-50', 'cursor-not-allowed');
+                const resultPanel = document.querySelector('#screen-result .glass-panel'); resultPanel.classList.remove('animate-popup'); void resultPanel.offsetWidth; resultPanel.classList.add('animate-popup');
+
+                document.getElementById('result-header').innerText = completed ? "MISSION COMPLETE" : "MISSION FAILED"; 
+                document.getElementById('result-header').className = `text-2xl sm:text-5xl font-sci font-bold mb-2 tracking-widest ${completed ? 'text-emerald-400 neon-text-primary' : 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]'}`;
+                document.getElementById('result-subheader').innerText = `STAGE ${GameState.currentStage} FINISHED`;
+                document.getElementById('result-time').innerText = `${min}:${sec}`; document.getElementById('result-correct').innerText = GameState.stats.correct; document.getElementById('result-wrong').innerText = GameState.stats.wrong;
+                const acc = Math.round((GameState.stats.correct / (GameState.stats.correct + GameState.stats.wrong)) * 100) || 0; 
+                
+                const rankIconEl = document.getElementById('result-icon'); const rankTextEl = document.getElementById('result-rank');
+                rankIconEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-slate-500"></i>'; rankIconEl.className = "text-4xl sm:text-6xl mb-2 sm:mb-4 text-slate-500 relative z-10";
+                rankTextEl.innerText = "CALCULATING..."; rankTextEl.className = "text-lg sm:text-xl font-bold text-slate-400 font-sci relative z-10 animate-pulse";
+                AudioSys.playScoreRoll(); this.animateValue(document.getElementById('result-score'), 0, GameState.score, 1500); this.animateValue(document.getElementById('result-acc'), 0, acc, 1500, "%");
+
+                let rank = "FAILED", icon = '<i class="fa-solid fa-skull"></i>', color = "text-red-400 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]";
+                if (completed) {
+                    if (acc >= 100) { rank = "PERFECT"; icon = '<i class="fa-solid fa-crown"></i>'; color = "text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]"; }
+                    else if (acc >= 80) { rank = "EXPERT"; icon = '<i class="fa-solid fa-star"></i>'; color = "text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.8)]"; }
+                    else if (acc >= 60) { rank = "GOOD JOB"; icon = '<i class="fa-solid fa-thumbs-up"></i>'; color = "text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]"; }
+                    else { rank = "SURVIVOR"; icon = '<i class="fa-solid fa-shield-halved"></i>'; color = "text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]"; }
+                }
+
+                if (completed && GameState.currentStage < 3) { btnPrimary.innerHTML = '<i class="fa-solid fa-forward mr-2"></i> NEXT STAGE'; btnPrimary.onclick = () => GameSys.startCountdown(GameState.currentStage + 1); } 
+                else if (completed && GameState.currentStage === 3) { btnPrimary.innerHTML = '<i class="fa-solid fa-flag-checkered mr-2"></i> FINISH ALL'; btnPrimary.onclick = () => GameSys.returnToMenu(); } 
+                else { btnPrimary.innerHTML = '<i class="fa-solid fa-rotate-right mr-2"></i> RETRY STAGE'; btnPrimary.onclick = () => GameSys.startCountdown(GameState.currentStage); }
+
+                setTimeout(() => {
+                    if(completed) AudioSys.playTriumph(); else AudioSys.playError();
+                    rankIconEl.innerHTML = icon; rankIconEl.className = `text-4xl sm:text-6xl mb-2 sm:mb-4 ${color} relative z-10 animate-stamp`;
+                    rankTextEl.innerText = rank; rankTextEl.className = `text-lg sm:text-2xl font-bold ${color} font-sci relative z-10 animate-stamp`;
+                }, 1500);
+                
+                const payload = { action: "saveAttempt", attemptId: GameState.attemptId, student: { studentId: GameState.student.studentId, firstName: GameState.student.firstName, lastName: GameState.student.lastName }, summary: { score: GameState.score, correct: GameState.stats.correct, wrong: GameState.stats.wrong, accuracy: acc, totalTime: totalTimeSec, questionCount: GameState.questionResults.length, deviceMode: PoseTrackingSys.fallbackMode ? "Touch/Mouse" : "Zone Jump", missionLevel: "GEO-SPHERE EX (M.5) - STAGE " + GameState.currentStage }, questions: GameState.questionResults };
+                BackendSys.saveAttempt(payload);
+            }
+        };
+
+        window.onload = () => { 
+            DeviceSys.init(); GraphicsSys.init(); PoseTrackingSys.init(); GestureSys.init(); DragDropSys.init(); LoginSys.init(); 
+            document.addEventListener("visibilitychange", () => {
+                if (document.hidden) { GraphicsSys.isGraphicsActive = false; PoseTrackingSys.isActive = false; if(AudioSys.ctx && AudioSys.ctx.state === 'running') AudioSys.ctx.suspend(); } 
+                else { GraphicsSys.isGraphicsActive = true; if(AudioSys.ctx && AudioSys.ctx.state === 'suspended' && !AudioSys.isMuted) AudioSys.ctx.resume(); const isGameScreen = !document.getElementById('screen-game').classList.contains('hidden-sys'); const isCountdown = !document.getElementById('screen-countdown').classList.contains('hidden-sys'); if (isGameScreen || isCountdown) { PoseTrackingSys.isActive = true; } }
+            });
+        };
+        window.GameSys = GameSys; window.AudioSys = AudioSys; window.LoginSys = LoginSys; window.PoseTrackingSys = PoseTrackingSys;
+    </script>
+</body>
+</html>
